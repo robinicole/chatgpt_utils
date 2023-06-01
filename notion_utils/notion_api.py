@@ -2,22 +2,47 @@
 import requests
 
 NOTION_VERSION = "2022-02-22"
-API_URL = "https://api.notion.com/v1/databases/991958eedf8044eca81f1f4dac5334d2/query"
+API_URL = "https://api.notion.com/v1/databases/{database_id}/query"
 
 
 class NotionAPI:
-    def __init__(self, token):
+    def __init__(self, token, datatabase_name):
         self.token = token
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Notion-Version": NOTION_VERSION,
             "Content-Type": "application/json",
         }
+        try:
+            database_id = self.list_databases()[datatabase_name]
+        except KeyError:
+            print("Database not found")
+        self.api_url = API_URL.format(database_id=database_id)
 
     def retrieve_data(self) -> dict:
         """Retrieve data from Notion API."""
-        resp = requests.post(API_URL, headers=self.headers).json()
+        resp = requests.post(self.api_url, headers=self.headers).json()
         return resp["results"]
+
+    def list_databases(self):
+        objs = requests.post(
+            "https://api.notion.com/v1/search",
+            json={
+                "filter": {
+                    "value": "database",
+                    "property": "object",
+                },
+            },
+            headers=self.headers,
+        )
+        objs = objs.json()["results"]
+        db_to_id = dict()
+        for obj in objs:
+            try:
+                db_to_id[obj["title"][0]["text"]["content"]] = obj["id"]
+            except:
+                pass
+        return db_to_id
 
     @staticmethod
     def get_property(
@@ -41,12 +66,12 @@ class NotionAPI:
         except KeyError:
             return []
 
-    def process_data(self, results: dict) -> list:
+    def process_data(self, results: dict, children_name="Children") -> list:
         return [
             {
                 "title": self.get_property(result, "Name", "title", "plain_text"),
                 "id": self.get_id(result),
-                "children": self.get_relation_id(result, "Children"),
+                "children": self.get_relation_id(result, children_name),
                 "summary": self.get_property(
                     result, "AI summary", "rich_text", "plain_text"
                 ),
@@ -58,8 +83,8 @@ class NotionAPI:
     def map_id_to_title(data: list) -> dict:
         return {row["id"]: row["title"] for row in data}
 
-    def full_process(self):
+    def full_process(self, children_name="Children"):
         response = self.retrieve_data()
-        data = self.process_data(response)
+        data = self.process_data(response, children_name)
         id_to_title = self.map_id_to_title(data)
         return data, id_to_title

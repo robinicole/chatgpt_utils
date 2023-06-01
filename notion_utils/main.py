@@ -1,5 +1,5 @@
+"""Main module to draw a notes graph from Notion."""
 import argparse
-from pyvis.network import Network
 from notion_utils.notion_api import NotionAPI
 from notion_utils.network_graph import NetworkGraphCorrelation, NetworkGraphRelation
 
@@ -22,16 +22,21 @@ def main():
         default=["relations", "correlations"],
         help="Graph kinds to draw, it can be one of relations or correlations",
     )
+    parser.add_argument(
+        "--children_name",
+        default="Child Task",
+        help="Name of the children property in Notion",
+    )
     args = parser.parse_args()
 
     # Get data from Notion API
-    notion_api = NotionAPI(args.token)
-    data, id_to_title = notion_api.full_process()
+    notion_api = NotionAPI(args.token, "GTD Tasks")
+    data, id_to_title = notion_api.full_process(args.children_name)
 
     # Build and display graph
     for GraphBuilder, output, kind in zip(
         [NetworkGraphRelation, NetworkGraphCorrelation],
-        ["graph_relations.html", "graph_correlations.html"],
+        ["graph_from_relations.html", "graph_from_correlations.html"],
         ["relations", "correlations"],
     ):
         if kind in args.graph_kinds:
