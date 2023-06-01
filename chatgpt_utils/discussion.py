@@ -6,7 +6,7 @@ from chatgpt_utils.interface import ChatGPTBot, ROLE_SYSTEM
 
 
 def generate_iam_initial_prompt(role: str):
-    return f"I am {role}."
+    return f"You are {role}. In the rest of this interaction you will interact as him. Do not break character at any time"
 
 
 class ChatGPTDiscussion:
@@ -27,3 +27,4 @@ class ChatGPTDiscussion:
 
     def kickoff_discussion(self):
         """TODO: implement this method."""
+        pass
