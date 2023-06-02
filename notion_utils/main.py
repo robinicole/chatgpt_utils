@@ -27,10 +27,11 @@ def main():
         default="Child Task",
         help="Name of the children property in Notion",
     )
+    parser.add_argument("--database_name", default="GTD Tasks", help="Notion database")
     args = parser.parse_args()
 
     # Get data from Notion API
-    notion_api = NotionAPI(args.token, "GTD Tasks")
+    notion_api = NotionAPI(args.token, args.database_name)
     data, id_to_title = notion_api.full_process(args.children_name)
 
     # Build and display graph
