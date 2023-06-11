@@ -1,51 +1,64 @@
 """Main module to draw a notes graph from Notion."""
-import argparse
-from notion_utils.notion_api import NotionAPI
+import typer
+from typing import List
+from notion_utils.notion_api import NotionAPI, list_databases
 from notion_utils.network_graph import NetworkGraphCorrelation, NetworkGraphRelation
 
+app = typer.Typer()
 
-def main():
-    parser = argparse.ArgumentParser(description="Draw a notes graph from Notion")
-    parser.add_argument("--token", required=True, help="Your Notion token")
-    parser.add_argument(
-        "--cutoff",
-        type=float,
-        default=0.5,
+AVAILABLE_GRAPHS = [NetworkGraphRelation, NetworkGraphCorrelation]
+AVAILABLE_GRAPHS_NAMES = [gr.name for gr in AVAILABLE_GRAPHS]
+GRAPH_NAMES_STRING = ", ".join(AVAILABLE_GRAPHS_NAMES)
+
+
+@app.command("draw_graph")
+def main(
+    token: str = typer.Option(..., help="Your Notion token"),
+    cutoff: float = typer.Option(
+        0.5,
         help="Correlation cutoff for when we draw the graph with the correlation matrix",
-    )
-    parser.add_argument(
-        "--overlap", type=int, default=-1000, help="Overlap for force atlas 2based"
-    )
-    parser.add_argument(
-        "--graph_kinds",
-        nargs="+",
-        default=["relations", "correlations"],
-        help="Graph kinds to draw, it can be one of relations or correlations",
-    )
-    parser.add_argument(
-        "--children_name",
-        default="Child Task",
-        help="Name of the children property in Notion",
-    )
-    parser.add_argument("--database_name", default="GTD Tasks", help="Notion database")
-    args = parser.parse_args()
-
+    ),
+    overlap: int = typer.Option(-1000, help="Overlap for force atlas 2 based"),
+    graph_kinds: str = typer.Option(
+        GRAPH_NAMES_STRING,
+        help=f"Graph kinds to draw, it can be one of {GRAPH_NAMES_STRING}",
+    ),
+    children_name: str = typer.Option(
+        "Child Task", help="Name of the children property in Notion"
+    ),
+    database_name: str = typer.Option("GTD Tasks", help="Notion database"),
+    file_prefix: str = typer.Option("", help="Prefix for the output files"),
+):
+    graph_kinds = graph_kinds.split(",")
+    for input_graph_name in graph_kinds:
+        if input_graph_name not in AVAILABLE_GRAPHS_NAMES:
+            raise ValueError(
+                f"Graph name {input_graph_name} not in {AVAILABLE_GRAPHS_NAMES}"
+            )
+    print(graph_kinds)
     # Get data from Notion API
-    notion_api = NotionAPI(args.token, args.database_name)
-    data, id_to_title = notion_api.full_process(args.children_name)
+    notion_api = NotionAPI(token, database_name)
+    data, id_to_title = notion_api.full_process(children_name)
 
     # Build and display graph
-    for GraphBuilder, output, kind in zip(
-        [NetworkGraphRelation, NetworkGraphCorrelation],
-        ["graph_from_relations.html", "graph_from_correlations.html"],
-        ["relations", "correlations"],
-    ):
-        if kind in args.graph_kinds:
+    for GraphBuilder in AVAILABLE_GRAPHS:
+        name = GraphBuilder.name
+        if name in graph_kinds:
+            filename = f"{file_prefix}_{name}.html"
             network_graph = GraphBuilder(data, id_to_title)
-            graph = network_graph.build_graph()
-            print(f"Saving {kind} graph in {output}")
-            network_graph.save_graph_in_html(graph, output)
+            graph = network_graph.build_graph(cutoff=cutoff)
+            typer.echo(f"Saving {name} graph in {filename}")
+            network_graph.save_graph_in_html(graph, filename, overlap=overlap)
+
+
+@app.command("list-databases")
+def list_databases_command(token: str = typer.Option(..., help="Your Notion token")):
+    # TODO : make it work
+    databases = list_databases(token)
+    for key, val in databases.items():
+        if val["self_relation_properties"]:
+            typer.echo(f"{key} : {val}")
 
 
 if __name__ == "__main__":
-    main()
+    app()
